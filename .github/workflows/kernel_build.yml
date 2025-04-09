@@ -26,7 +26,7 @@ jobs:
             python3 \
             gcc-9 g++-9
 
-          # Install working dtc version
+          # Build and install compatible dtc
           wget https://git.kernel.org/pub/scm/utils/dtc/dtc.git/snapshot/dtc-1.4.7.tar.gz
           tar xzf dtc-1.4.7.tar.gz
           cd dtc-1.4.7
@@ -34,9 +34,9 @@ jobs:
           sudo make install PREFIX=/usr
           cd ..
 
-      - name: Apply all required patches
+      - name: Apply critical fixes
         run: |
-          # 1. Fix array bounds error
+          # 1. Fix array bounds error in libfdt
           sed -i 's/fdth->name = cpu_to_fdt32(val)/memcpy(\&fdth->name, \&val, sizeof(fdt32_t))/g' libfdt/libfdt.h
 
           # 2. Fix DTC multiple definitions
@@ -50,8 +50,8 @@ jobs:
             -e 's/-Werror=restrict//g' \
             -e 's/-Werror//g' {} +
 
-          # 4. Fix scripts/dtc Makefile
-          sed -i '/^hostprogs-y += dtc$/a HOSTCFLAGS_dtc += -Wno-error' scripts/dtc/Makefile
+          # 4. Patch scripts/dtc specifically
+          sed -i '/^hostprogs-y += dtc$/a HOSTCFLAGS_dtc += -Wno-error -fcommon' scripts/dtc/Makefile
 
       - name: Configure kernel
         run: |
@@ -62,15 +62,15 @@ jobs:
       - name: Build kernel
         run: |
           make ARCH=arm64 \
-               CC=gcc-9 \
-               HOSTCC=gcc-9 \
+               CC="gcc-9 -fcommon" \
+               HOSTCC="gcc-9 -fcommon" \
                DTC=dtc \
-               KCFLAGS="-Wno-error -Wno-error=array-bounds" \
+               KCFLAGS="-Wno-error -Wno-error=array-bounds -Wno-error=stringop-overflow" \
                -j$(nproc)
 
       - name: Verify build
         run: |
-          [ -f arch/arm64/boot/Image ] || (echo "Build failed" && exit 1)
+          [ -f arch/arm64/boot/Image ] || (echo "Build failed - Kernel image not found" && exit 1)
           echo "Kernel built successfully"
 
       - name: Upload artifacts
