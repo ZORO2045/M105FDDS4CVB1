@@ -23,16 +23,43 @@ jobs:
       run: |
         git clone --depth=1 https://github.com/arter97/arm64-gcc.git gcc64
 
-    - name: Build Kernel
+    - name: Set up the environment
       run: |
         export ARCH=arm64
-        export SUBARCH=arm64
-        export CROSS_COMPILE=$GITHUB_WORKSPACE/gcc64/bin/aarch64-linux-gnu-
-        make m10lte_swa_open_defconfig
-        make -j$(nproc)
+        export PLATFORM_VERSION=10
+        export ANDROID_MAJOR_VERSION=q
+        export CONFIG_SECTION_MISMATCH_WARN_ONLY=y
 
-    - name: Upload Kernel Image
-      uses: actions/upload-artifact@v3
-      with:
-        name: kernel-out
+    - name: Run defconfig
+      run: make CONFIG_SECTION_MISMATCH_WARN_ONLY=y ARCH=arm64 m10lte_swa_open_defconfig
+
+    - name: Build Kernel
+      run: make CONFIG_SECTION_MISMATCH_WARN_ONLY=y ARCH=arm64 -j16
+
+    - name: Create a Release
+      id: create_release
+      run: |
+        TAG_NAME="v$(date +'%Y%m%d%H%M%S')"
+        RELEASE_NAME="Kernel Release $(date +'%Y-%m-%d %H:%M:%S')"
+        BODY="This is an automated kernel build release."
+        
+        echo "Creating release $RELEASE_NAME with tag $TAG_NAME"
+        
+        curl -X POST \
+          -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          -d '{"tag_name": "'"$TAG_NAME"'","name": "'"$RELEASE_NAME"'","body": "'"$BODY"'"}' \
+          "https://api.github.com/repos/${{ github.repository }}/releases"
+
+    - name: Upload Kernel Image to Release
+      run: |
+        TAG_NAME="v$(date +'%Y%m%d%H%M%S')"
+        FILE_PATH="arch/arm64/boot/Image.gz-dtb"
+        
+        RELEASE_ID=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          "https://api.github.com/repos/${{ github.repository }}/releases/tags/$TAG_NAME" | jq .id)
+        
+        curl -X POST \
+          -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          -F "file=@$FILE_PATH" \
+          "https://uploads.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID/assets?name=$(basename $FILE_PATH)"        name: kernel-out
         path: arch/arm64/boot/Image.gz-dtb        path: arch/arm64/boot/Image.gz-dtb
