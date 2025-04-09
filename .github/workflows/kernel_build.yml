@@ -1,70 +1,57 @@
-name: Build Kernel
+name: Build Android Kernel
 
 on:
   push:
-    branches:
-      - main
-  pull_request:
     branches:
       - main
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
+      - name: Checkout the code
+        uses: actions/checkout@v3
 
-    - name: Set up Toolchain
-      run: |
-        git clone --depth=1 https://github.com/arter97/arm64-gcc.git
-        export CROSS_COMPILE=$(pwd)/arm64-gcc/bin/aarch64-linux-android-
+      - name: Set up JDK 8
+        uses: actions/setup-java@v2
+        with:
+          java-version: '8'
 
-    - name: Install Dependencies
-      run: |
-        sudo apt update
-        sudo apt install -y bc bison flex libssl-dev make libc6-dev libncurses5-dev \
-                            crossbuild-essential-arm64 git wget build-essential curl \
-                            lz4 cpio
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            device-tree-compiler \
+            gcc-aarch64-linux-gnu \
+            git \
+            make \
+            bc \
+            flex \
+            bison \
+            libssl-dev \
+            libncurses5-dev \
+            libelf-dev \
+            libssl-dev \
+            zlib1g-dev
 
-    - name: Run defconfig
-      run: |
-        export ARCH=arm64
-        export PLATFORM_VERSION=10
-        export ANDROID_MAJOR_VERSION=q
-        export CONFIG_SECTION_MISMATCH_WARN_ONLY=y
-        make m10lte_swa_open_defconfig
+      - name: Set up environment variables
+        run: |
+          export ARCH=arm64
+          export PLATFORM_VERSION=10
+          export ANDROID_MAJOR_VERSION=q
+          export CONFIG_SECTION_MISMATCH_WARN_ONLY=y
 
-    - name: Build Kernel
-      run: |
-        export ARCH=arm64
-        export CONFIG_SECTION_MISMATCH_WARN_ONLY=y
-        make -j$(nproc)
+      - name: Configure kernel
+        run: |
+          make CONFIG_SECTION_MISMATCH_WARN_ONLY=y ARCH=arm64 m10lte_swa_open_defconfig
 
-    - name: Create a Release
-      id: create_release
-      run: |
-        TAG_NAME="v$(date +'%Y%m%d%H%M%S')"
-        RELEASE_NAME="Kernel Release $(date +'%Y-%m-%d %H:%M:%S')"
-        BODY="This is an automated kernel build release."
-        
-        echo "Creating release $RELEASE_NAME with tag $TAG_NAME"
-        
-        curl -X POST \
-          -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-          -d '{"tag_name": "'"$TAG_NAME"'","name": "'"$RELEASE_NAME"'","body": "'"$BODY"'"}' \
-          "https://api.github.com/repos/${{ github.repository }}/releases"
+      - name: Build the kernel
+        run: |
+          make CONFIG_SECTION_MISMATCH_WARN_ONLY=y ARCH=arm64 -j16
 
-    - name: Upload Kernel Image to Release
-      run: |
-        TAG_NAME="v$(date +'%Y%m%d%H%M%S')"
-        FILE_PATH="arch/arm64/boot/Image.gz-dtb"
-        
-        RELEASE_ID=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-          "https://api.github.com/repos/${{ github.repository }}/releases/tags/$TAG_NAME" | jq .id)
-        
-        curl -X POST \
-          -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-          -F "file=@$FILE_PATH" \
-          "https://uploads.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID/assets?name=$(basename $FILE_PATH)"
+      - name: Create release artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: boot-image
+          path: path/to/your/boot.img
