@@ -11,6 +11,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history needed for version detection
 
       - name: Install dependencies
         run: |
@@ -24,26 +26,39 @@ jobs:
             python3 \
             gcc-9 g++-9
 
+          # Install older dtc (1.4.7)
+          wget https://git.kernel.org/pub/scm/utils/dtc/dtc.git/snapshot/dtc-1.4.7.tar.gz
+          tar xzf dtc-1.4.7.tar.gz
+          cd dtc-1.4.7
+          make -j$(nproc)
+          sudo make install PREFIX=/usr
+          cd ..
+          rm -rf dtc-1.4.7*
+
       - name: Set up environment
         run: |
           echo "ARCH=arm64" >> $GITHUB_ENV
           echo "CROSS_COMPILE=aarch64-linux-gnu-" >> $GITHUB_ENV
           echo "CC=gcc-9" >> $GITHUB_ENV
           echo "HOSTCC=gcc-9" >> $GITHUB_ENV
-          echo "KBUILD_BUILD_USER=github" >> $GITHUB_ENV
-          echo "KBUILD_BUILD_HOST=actions" >> $GITHUB_ENV
+          echo "DTC=dtc" >> $GITHUB_ENV
+          echo "DTC_FLAGS=-Wno-error -@" >> $GITHUB_ENV
 
-      - name: Patch build system
+      - name: Apply critical patches
         run: |
-          # Disable array bounds warnings
+          # Fix DTC multiple definitions
+          sed -i 's/^YYLTYPE yylloc;/extern YYLTYPE yylloc;/' scripts/dtc/dtc-lexer.lex.c_shipped || true
+          
+          # Disable problematic warnings
           sed -i 's/-Werror=array-bounds//g' scripts/Makefile.extrawarn
           sed -i 's/-Werror//g' scripts/Makefile.extrawarn
           
-          # Patch libfdt header
-          sed -i 's/fdth->name = cpu_to_fdt32(val)/memcpy(\&fdth->name, \&val, sizeof(fdt32_t))/g' libfdt/libfdt.h || true
+          # Fix scripts build
+          sed -i 's/^hostprogs-y += dtc$/hostprogs-y += dtc\nHOSTCFLAGS_dtc += -Wno-error/' scripts/dtc/Makefile
 
       - name: Configure kernel
         run: |
+          make ARCH=arm64 distclean
           make ARCH=arm64 m10lte_swa_open_defconfig
           yes "" | make ARCH=arm64 oldconfig
 
@@ -52,18 +67,18 @@ jobs:
           make ARCH=arm64 \
                CC=gcc-9 \
                HOSTCC=gcc-9 \
-               KCFLAGS="-Wno-error=array-bounds -Wno-error" \
+               KCFLAGS="-Wno-error=array-bounds -Wno-error=stringop-overflow" \
                -j$(nproc)
 
       - name: Verify build
         run: |
           ls -la arch/arm64/boot/
-          [ -f arch/arm64/boot/Image ] || exit 1
+          [ -f arch/arm64/boot/Image ] && echo "Build successful" || exit 1
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: kernel-build
+          name: kernel-image
           path: |
             arch/arm64/boot/Image
             arch/arm64/boot/dts/*.dtb
