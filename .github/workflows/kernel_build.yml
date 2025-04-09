@@ -1,0 +1,36 @@
+name: Build OneUI Kernel
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Kernel Source
+      uses: actions/checkout@v3
+
+    - name: Set up Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y bc bison flex libssl-dev make libc6-dev libncurses5-dev git wget curl
+
+    - name: Clone GCC Toolchain
+      run: |
+        git clone https://github.com/GrowtopiaJaw/aarch64-linux-android-4.9 -b google --depth=1
+
+    - name: Make build_kernel.sh executable
+      run: chmod +x build_kernel.sh
+
+    - name: Run Kernel Build Script
+      env:
+        PATH: ${{ github.workspace }}/aarch64-linux-android-4.9/bin:${{ env.PATH }}
+        CROSS_COMPILE: aarch64-linux-android-
+      run: ./build_kernel.sh
+
+    - name: Upload Kernel Image
+      uses: actions/upload-artifact@v4
+      with:
+        name: kernel-image
+        path: arch/arm64/boot/Image
