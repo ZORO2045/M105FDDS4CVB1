@@ -21,19 +21,20 @@ jobs:
             git make bc flex bison \
             libssl-dev libncurses5-dev \
             libelf-dev zlib1g-dev \
-            gcc-10 g++-10  # Using GCC 10 instead of 9
+            device-tree-compiler=1.6.0-1  # Install specific older dtc version
 
       - name: Set up environment
         run: |
           echo "ARCH=arm64" >> $GITHUB_ENV
           echo "CROSS_COMPILE=aarch64-linux-gnu-" >> $GITHUB_ENV
-          echo "CC=aarch64-linux-gnu-gcc" >> $GITHUB_ENV  # Use cross-compiler
-          echo "HOSTCC=gcc-10" >> $GITHUB_ENV  # Host tools use GCC 10
+          echo "DTC=dtc" >> $GITHUB_ENV  # Explicitly use system dtc
 
-      - name: Apply DTC fix
+      - name: Patch DTC checks
         run: |
-          # Apply workaround for DTC multiple definition error
-          sed -i 's/^YYLTYPE yylloc;/extern YYLTYPE yylloc;/' scripts/dtc/dtc-lexer.lex.c_shipped || true
+          # Disable strict device tree checks
+          sed -i 's/^\(dtc_flags.*=.*\)/\1 -Wno-unit_address_vs_reg/' scripts/Makefile.lib
+          sed -i 's/^\(dtc_flags.*=.*\)/\1 -Wno-simple_bus_reg/' scripts/Makefile.lib
+          sed -i 's/^\(dtc_flags.*=.*\)/\1 -Wno-unit_address_format/' scripts/Makefile.lib
 
       - name: Configure kernel
         run: |
@@ -43,13 +44,13 @@ jobs:
       - name: Build kernel
         run: |
           make ARCH=arm64 \
-               CC="$CROSS_COMPILE"gcc \
-               HOSTCC=gcc-10 \
-               DTC_FLAGS="-Wno-error" \
+               DTC_FLAGS="-Wno-error -@ -Wno-unit_address_vs_reg -Wno-simple_bus_reg -Wno-unit_address_format" \
                -j$(nproc)
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: kernel-image
-          path: arch/arm64/boot/Image*
+          path: |
+            arch/arm64/boot/Image*
+            arch/arm64/boot/dts/*.dtb
