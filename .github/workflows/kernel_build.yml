@@ -1,4 +1,4 @@
-name: Build OneUI Kernel
+name: Build OneUI Kernel v1.0
 
 on:
   workflow_dispatch:
