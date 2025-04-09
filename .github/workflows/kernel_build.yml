@@ -31,7 +31,7 @@ jobs:
             libelf-dev \
             zlib1g-dev \
             python3 \
-            gcc-9 g++-9  # Use older GCC to avoid dtc issues
+            gcc-9 g++-9
 
       - name: Set up environment
         run: |
@@ -40,24 +40,30 @@ jobs:
           echo "ANDROID_MAJOR_VERSION=q" >> $GITHUB_ENV
           echo "PLATFORM_VERSION=10" >> $GITHUB_ENV
           echo "CONFIG_SECTION_MISMATCH_WARN_ONLY=y" >> $GITHUB_ENV
-          echo "CC=gcc-9" >> $GITHUB_ENV  # Use GCC 9 specifically
+          echo "CC=gcc-9" >> $GITHUB_ENV
           echo "HOSTCC=gcc-9" >> $GITHUB_ENV
 
       - name: Initialize configuration
         run: |
-          # Clean any previous builds
           make ARCH=arm64 distclean || true
-          
-          # Generate configuration
           make ARCH=arm64 m10lte_swa_open_defconfig
           yes "" | make ARCH=arm64 oldconfig
 
+      - name: Build kernel (first pass to generate files)
+        run: |
+          # Build just enough to generate the dtc files
+          make ARCH=arm64 scripts/dtc/dtc-parser.tab.h || true
+
       - name: Apply dtc workaround
         run: |
-          # Workaround for dtc multiple definition error
-          sed -i 's/^YYLTYPE yylloc;/extern YYLTYPE yylloc;/' scripts/dtc/dtc-lexer.lex.c
+          # Now the file should exist - apply the fix
+          if [ -f scripts/dtc/dtc-lexer.lex.c ]; then
+            sed -i 's/^YYLTYPE yylloc;/extern YYLTYPE yylloc;/' scripts/dtc/dtc-lexer.lex.c
+          else
+            echo "Warning: dtc-lexer.lex.c not found, continuing without workaround"
+          fi
 
-      - name: Build kernel
+      - name: Complete kernel build
         run: |
           make ARCH=arm64 -j$(nproc)
 
