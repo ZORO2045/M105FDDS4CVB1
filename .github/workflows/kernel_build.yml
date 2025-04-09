@@ -1,40 +1,46 @@
-name: Kernel Build
+name: Build Kernel
 
 on:
   push:
+    branches:
+      - main
+  pull_request:
     branches:
       - main
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
+    
     steps:
-    - name: Checkout kernel source
+    - name: Checkout repository
       uses: actions/checkout@v3
 
-    - name: Set up build environment
+    - name: Set up Toolchain
+      run: |
+        git clone --depth=1 https://github.com/arter97/arm64-gcc.git
+        export CROSS_COMPILE=$(pwd)/arm64-gcc/bin/aarch64-linux-android-
+
+    - name: Install Dependencies
       run: |
         sudo apt update
         sudo apt install -y bc bison flex libssl-dev make libc6-dev libncurses5-dev \
-                            crossbuild-essential-arm64 git wget build-essential curl lz4 cpio
+                            crossbuild-essential-arm64 git wget build-essential curl \
+                            lz4 cpio
 
-    - name: Clone toolchain (GCC)
-      run: |
-        git clone --depth=1 https://github.com/arter97/arm64-gcc.git gcc64
-
-    - name: Set up the environment
+    - name: Run defconfig
       run: |
         export ARCH=arm64
         export PLATFORM_VERSION=10
         export ANDROID_MAJOR_VERSION=q
         export CONFIG_SECTION_MISMATCH_WARN_ONLY=y
-
-    - name: Run defconfig
-      run: make CONFIG_SECTION_MISMATCH_WARN_ONLY=y ARCH=arm64 m10lte_swa_open_defconfig
+        make m10lte_swa_open_defconfig
 
     - name: Build Kernel
-      run: make CONFIG_SECTION_MISMATCH_WARN_ONLY=y ARCH=arm64 -j16
+      run: |
+        export ARCH=arm64
+        export CONFIG_SECTION_MISMATCH_WARN_ONLY=y
+        make -j$(nproc)
 
     - name: Create a Release
       id: create_release
@@ -61,5 +67,4 @@ jobs:
         curl -X POST \
           -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
           -F "file=@$FILE_PATH" \
-          "https://uploads.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID/assets?name=$(basename $FILE_PATH)"        name: kernel-out
-        path: arch/arm64/boot/Image.gz-dtb        path: arch/arm64/boot/Image.gz-dtb
+          "https://uploads.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID/assets?name=$(basename $FILE_PATH)"
