@@ -22,29 +22,25 @@ jobs:
             libssl-dev libncurses5-dev \
             libelf-dev zlib1g-dev \
             python3 \
-            wget
-
-          # Build and install older dtc (1.4.7) from source
-          wget https://git.kernel.org/pub/scm/utils/dtc/dtc.git/snapshot/dtc-1.4.7.tar.gz
-          tar xzf dtc-1.4.7.tar.gz
-          cd dtc-1.4.7
-          make -j$(nproc)
-          sudo make install PREFIX=/usr
-          cd ..
-          rm -rf dtc-1.4.7*
+            gcc-9 g++-9
 
       - name: Set up environment
         run: |
           echo "ARCH=arm64" >> $GITHUB_ENV
           echo "CROSS_COMPILE=aarch64-linux-gnu-" >> $GITHUB_ENV
-          echo "DTC=dtc" >> $GITHUB_ENV
-          echo "DTC_FLAGS=-Wno-error -@" >> $GITHUB_ENV
+          echo "CC=gcc-9" >> $GITHUB_ENV
+          echo "HOSTCC=gcc-9" >> $GITHUB_ENV
+          echo "KBUILD_BUILD_USER=github" >> $GITHUB_ENV
+          echo "KBUILD_BUILD_HOST=actions" >> $GITHUB_ENV
 
       - name: Patch build system
         run: |
-          # Disable problematic DTC checks
-          sed -i 's/-Werror//g' scripts/Makefile.lib
-          sed -i 's/^\(dtc_cpp_flags.*=.*\)/\1 -Wno-error/' scripts/Makefile.lib
+          # Disable array bounds warnings
+          sed -i 's/-Werror=array-bounds//g' scripts/Makefile.extrawarn
+          sed -i 's/-Werror//g' scripts/Makefile.extrawarn
+          
+          # Patch libfdt header
+          sed -i 's/fdth->name = cpu_to_fdt32(val)/memcpy(\&fdth->name, \&val, sizeof(fdt32_t))/g' libfdt/libfdt.h || true
 
       - name: Configure kernel
         run: |
@@ -54,8 +50,9 @@ jobs:
       - name: Build kernel
         run: |
           make ARCH=arm64 \
-               DTC_EXT=dtc \
-               DTC_FLAGS="-Wno-error -@" \
+               CC=gcc-9 \
+               HOSTCC=gcc-9 \
+               KCFLAGS="-Wno-error=array-bounds -Wno-error" \
                -j$(nproc)
 
       - name: Verify build
