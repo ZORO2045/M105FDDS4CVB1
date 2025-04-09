@@ -1,4 +1,4 @@
-name: Build OneUI Kernel v1.0
+name: Build OneUI Kernel
 
 on:
   workflow_dispatch:
@@ -16,6 +16,12 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y bc bison flex libssl-dev make libc6-dev libncurses5-dev git wget curl
 
+    - name: Cache GCC Toolchain
+      uses: actions/cache@v3
+      with:
+        path: ${{ github.workspace }}/aarch64-linux-android-4.9
+        key: ${{ runner.os }}-toolchain-${{ hashFiles('**/aarch64-linux-android-4.9/**') }}
+
     - name: Clone GCC Toolchain
       run: |
         git clone https://github.com/GrowtopiaJaw/aarch64-linux-android-4.9 -b google --depth=1
@@ -27,7 +33,7 @@ jobs:
       env:
         PATH: ${{ github.workspace }}/aarch64-linux-android-4.9/bin:${{ env.PATH }}
         CROSS_COMPILE: aarch64-linux-android-
-      run: ./build_kernel.sh
+      run: ./build_kernel.sh -j$(nproc)
 
     - name: Upload Kernel Image
       uses: actions/upload-artifact@v4
