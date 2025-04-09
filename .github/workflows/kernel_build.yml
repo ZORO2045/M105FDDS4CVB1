@@ -2,7 +2,8 @@ name: Kernel Build
 
 on:
   push:
-    branches: [ main ] 
+    branches:
+      - main
 
 jobs:
   build:
@@ -34,4 +35,4 @@ jobs:
       uses: actions/upload-artifact@v3
       with:
         name: kernel-out
-        path: arch/arm64/boot/Image.gz-dtb
+        path: arch/arm64/boot/Image.gz-dtb        path: arch/arm64/boot/Image.gz-dtb
