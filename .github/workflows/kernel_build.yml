@@ -51,7 +51,7 @@ jobs:
           make CONFIG_SECTION_MISMATCH_WARN_ONLY=y ARCH=arm64 -j16
 
       - name: Create release artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v2
         with:
           name: boot-image
           path: path/to/your/boot.img
