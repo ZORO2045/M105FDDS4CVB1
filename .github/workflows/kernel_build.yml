@@ -14,7 +14,7 @@ jobs:
     - name: Set up Dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y bc bison flex libssl-dev make libc6-dev libncurses5-dev git wget curl
+        sudo apt-get install -y bc bison flex libssl-dev make libc6-dev libncurses5-dev git wget curl coreutils
 
     - name: Cache GCC Toolchain
       uses: actions/cache@v3
@@ -31,8 +31,7 @@ jobs:
 
     - name: Run Kernel Build Script
       env:
-        PATH: ${{ github.workspace }}/aarch64-linux-android-4.9/bin:${{ env.PATH }}
-        CROSS_COMPILE: aarch64-linux-android-
+        CROSS_COMPILE: ${{ github.workspace }}/aarch64-linux-android-4.9/bin/aarch64-linux-android-
       run: ./build_kernel.sh -j$(nproc)
 
     - name: Upload Kernel Image
