@@ -7,16 +7,17 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04  # More specific version
     steps:
       - name: Checkout the code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4  # Updated to v4
 
       - name: Set up JDK 8
         uses: actions/setup-java@v3
         with:
           java-version: '8'
           distribution: 'temurin'
+          cache: 'gradle'
 
       - name: Install dependencies
         run: |
@@ -33,7 +34,6 @@ jobs:
             libssl-dev \
             libncurses5-dev \
             libelf-dev \
-            libssl-dev \
             zlib1g-dev
 
       - name: Set up environment variables
@@ -42,17 +42,23 @@ jobs:
           echo "PLATFORM_VERSION=10" >> $GITHUB_ENV
           echo "ANDROID_MAJOR_VERSION=q" >> $GITHUB_ENV
           echo "CONFIG_SECTION_MISMATCH_WARN_ONLY=y" >> $GITHUB_ENV
+          echo "CC=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+          echo "CROSS_COMPILE=aarch64-linux-gnu-" >> $GITHUB_ENV
 
       - name: Configure kernel
         run: |
-          make $CONFIG_SECTION_MISMATCH_WARN_ONLY ARCH=$ARCH m10lte_swa_open_defconfig
+          make ${{ env.CONFIG_SECTION_MISMATCH_WARN_ONLY }} ARCH=${{ env.ARCH }} m10lte_swa_open_defconfig
 
       - name: Build the kernel
         run: |
-          make $CONFIG_SECTION_MISMATCH_WARN_ONLY ARCH=$ARCH -j$(nproc)
+          make ${{ env.CONFIG_SECTION_MISMATCH_WARN_ONLY }} ARCH=${{ env.ARCH }} -j$(nproc)
 
-      - name: Create release artifact
-        uses: actions/upload-artifact@v3
+      - name: List build artifacts
+        run: ls -R arch/arm64/boot/
+
+      - name: Upload kernel image
+        uses: actions/upload-artifact@v4
         with:
           name: kernel-image
-          path: arch/arm64/boot/Image
+          path: arch/arm64/boot/Image*
+          if-no-files-found: error
