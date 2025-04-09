@@ -12,7 +12,7 @@ jobs:
       - name: Checkout the code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Get full history for version detection
+          fetch-depth: 0
 
       - name: Install dependencies
         run: |
@@ -29,9 +29,10 @@ jobs:
             libssl-dev \
             libncurses5-dev \
             libelf-dev \
-            zlib1g-dev
+            zlib1g-dev \
+            python3
 
-      - name: Set up environment variables
+      - name: Set up environment
         run: |
           echo "ARCH=arm64" >> $GITHUB_ENV
           echo "CROSS_COMPILE=aarch64-linux-gnu-" >> $GITHUB_ENV
@@ -39,26 +40,31 @@ jobs:
           echo "PLATFORM_VERSION=10" >> $GITHUB_ENV
           echo "CONFIG_SECTION_MISMATCH_WARN_ONLY=y" >> $GITHUB_ENV
 
-      - name: Clean previous build
-        run: make clean || true
-
-      - name: Configure kernel
+      - name: Initialize configuration
         run: |
-          make ARCH=${{ env.ARCH }} ${{ env.CONFIG_SECTION_MISMATCH_WARN_ONLY }} m10lte_swa_open_defconfig
-          make ARCH=${{ env.ARCH }} oldconfig
+          # First try to copy existing config if available
+          cp arch/arm64/configs/m10lte_swa_open_defconfig .config || true
+          
+          # Generate default configuration
+          make ARCH=arm64 m10lte_swa_open_defconfig
+          
+          # Process configuration
+          yes "" | make ARCH=arm64 oldconfig
 
-      - name: Build the kernel
+      - name: Build kernel
         run: |
-          make ARCH=${{ env.ARCH }} -j$(nproc)
+          make ARCH=arm64 -j$(nproc)
 
-      - name: Verify build output
+      - name: Verify artifacts
         run: |
           ls -la arch/arm64/boot/
-          file arch/arm64/boot/Image*
+          [ -f arch/arm64/boot/Image ] && echo "Kernel image found" || echo "Kernel image missing"
 
-      - name: Upload kernel image
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: kernel-image
-          path: arch/arm64/boot/Image*
+          name: kernel-artifacts
+          path: |
+            arch/arm64/boot/Image*
+            .config
           if-no-files-found: error
